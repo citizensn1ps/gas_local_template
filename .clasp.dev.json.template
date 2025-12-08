@@ -1,0 +1,5 @@
+{
+  "scriptId": "YOUR_DEV_SCRIPT_ID",
+  "rootDir": "dist",
+  "projectId": "gas-dev-env"
+}

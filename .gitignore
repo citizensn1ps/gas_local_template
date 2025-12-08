@@ -1,0 +1,16 @@
+# clasp configs
+.clasp.dev.json
+.clasp.prod.json
+
+# build output
+dist/Code.js
+
+# deno
+.deno/
+
+# OS
+.DS_Store
+
+# editor
+*.swp
+*~

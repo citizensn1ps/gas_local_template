@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "@gas/types": "/Users/alex/dev/gas_libs/types/",
+    "@gas/mocks": "/Users/alex/dev/gas_libs/mocks/gasmask/mod.ts"
+  },
+  "tasks": {
+    "build": "deno run -A scripts/build.ts",
+    "test": "deno test --allow-read tests/",
+    "push:dev": "clasp push --project .clasp.dev.json",
+    "push:prod": "clasp push --project .clasp.prod.json",
+    "logs": "clasp logs --watch --project .clasp.dev.json"
+  }
+}
