@@ -10,12 +10,14 @@ const encoder = new TextEncoder();
 interface Config {
   gasLibsPath: string;
   gcpDevProjectId: string;
+  gcpDevProjectNumber: string;
   claspDevUser: string;
 }
 
 const DEFAULTS: Config = {
   gasLibsPath: "/Users/alex/dev/gas_libs",
   gcpDevProjectId: "gas-dev-env",
+  gcpDevProjectNumber: "549065074538",
   claspDevUser: "gasDev",
 };
 
@@ -457,11 +459,11 @@ async function main() {
     console.log("\n📋 Manual steps required (one-time):\n");
     console.log("  1. Bind dev script to GCP project:");
     console.log("     clasp open --project .clasp.dev.json");
-    console.log(`     → Project Settings → Change project → ${config.gcpDevProjectId}\n`);
+    console.log(`     → Project Settings → Change project → GCP Project Dev Number: ${config.gcpDevProjectNumber}\n`);
 
     if (enableRun) {
       console.log("  2. Re-authenticate for clasp run:");
-      console.log(`     clasp login --creds ${clasp.claspDevUser} --project .clasp.dev.json\n`);
+      console.log(`     clasp login --creds ${config.claspDevUser} --project .clasp.dev.json\n`);
     }
   }
 
