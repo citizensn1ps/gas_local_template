@@ -28,7 +28,8 @@ async function loadConfig(): Promise<Config> {
     return {
       gasLibsPath: userConfig.gasLibsPath || DEFAULTS.gasLibsPath,
       gcpDevProjectId: userConfig.gcpDevProjectId || DEFAULTS.gcpDevProjectId,
-      claspDevUser: userConfig.claspDevUser || DEFAULTS.claspDevUser,
+      gcpDevProjectNumber: userConfig.gcpDevProjectNumber || DEFAULTS.gcpDevProjectNumber,
+      claspDevUser: userConfig.claspDevUser || DEFAULTS.claspDevUser
     };
   } catch {
     console.log("⚠️  Could not read deno.json, using defaults");
@@ -460,7 +461,6 @@ async function main() {
     console.log("  1. Bind dev script to GCP project:");
     console.log("     clasp open --project .clasp.dev.json");
     console.log(`     → Project Settings → Change project → GCP Project Dev Number: ${config.gcpDevProjectNumber}\n`);
-
     if (enableRun) {
       console.log("  2. Re-authenticate for clasp run:");
       console.log(`     clasp login --creds ${config.claspDevUser} --project .clasp.dev.json\n`);
