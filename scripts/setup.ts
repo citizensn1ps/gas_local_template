@@ -16,7 +16,7 @@ interface Config {
 
 const DEFAULTS: Config = {
   gasLibsPath: "/Users/alex/dev/gas_libs",
-  gcpDevProjectId: "gas-dev-env",
+  gcpDevProjectId: "gas-dev-env-479619",
   gcpDevProjectNumber: "549065074538",
   claspDevUser: "gasDev",
 };
