@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-// import { SpreadsheetApp } from "@gas/mocks";
+import { SpreadsheetApp } from "@gas/mocks";
 
 // Example test - replace with your actual tests
 Deno.test("example test", () => {

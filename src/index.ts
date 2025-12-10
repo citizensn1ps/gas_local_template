@@ -1,5 +1,8 @@
 /// <reference types="@gas/types" />
 
+import { SpreadsheetApp, SpreadsheetAppClass } from "../../gas_libs/mocks/gasmask/src/SpreadsheetApp.ts";
+import Sheet from "../../gas_libs/mocks/gasmask/src/SpreadsheetApp/Sheet.ts";
+
 /**
  * Runs when the spreadsheet is opened.
  */
