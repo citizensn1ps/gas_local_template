@@ -1,4 +1,9 @@
 {
+  "config": {
+    "gasLibsPath": "",
+    "gcpDevProjectId": "",
+    "claspDevUser": ""
+  },
   "imports": {
     "@gas/types": "/Users/alex/dev/gas_libs/types/",
     "@gas/mocks": "/Users/alex/dev/gas_libs/mocks/gasmask/src/mod.ts"

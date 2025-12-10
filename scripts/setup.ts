@@ -4,6 +4,37 @@ const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
 // ============================================================================
+// Config
+// ============================================================================
+
+interface Config {
+  gasLibsPath: string;
+  gcpDevProjectId: string;
+  claspDevUser: string;
+}
+
+const DEFAULTS: Config = {
+  gasLibsPath: "/Users/alex/dev/gas_libs",
+  gcpDevProjectId: "gas-dev-env",
+  claspDevUser: "gasDev",
+};
+
+async function loadConfig(): Promise<Config> {
+  try {
+    const denoConfig = JSON.parse(await Deno.readTextFile("deno.json"));
+    const userConfig = denoConfig.config || {};
+    return {
+      gasLibsPath: userConfig.gasLibsPath || DEFAULTS.gasLibsPath,
+      gcpDevProjectId: userConfig.gcpDevProjectId || DEFAULTS.gcpDevProjectId,
+      claspDevUser: userConfig.claspDevUser || DEFAULTS.claspDevUser,
+    };
+  } catch {
+    console.log("⚠️  Could not read deno.json, using defaults");
+    return DEFAULTS;
+  }
+}
+
+// ============================================================================
 // Utilities
 // ============================================================================
 
@@ -117,7 +148,6 @@ async function cloneExisting(scriptId: string): Promise<{ success: boolean }> {
 }
 
 async function migrateExisting(scriptId: string): Promise<{ success: boolean }> {
-  // Clone first
   console.log("\n📥 Cloning existing script...");
   const cloneResult = await run(["clasp", "clone", scriptId]);
 
@@ -126,7 +156,6 @@ async function migrateExisting(scriptId: string): Promise<{ success: boolean }> 
     return { success: false };
   }
 
-  // Move .js files to src/ as .ts
   console.log("📦 Migrating files to src/...");
 
   for await (const entry of Deno.readDir(".")) {
@@ -136,13 +165,10 @@ async function migrateExisting(scriptId: string): Promise<{ success: boolean }> 
 
       let content = await Deno.readTextFile(oldPath);
 
-      // Add reference to types at top
       if (!content.includes("@gas/types")) {
         content = `/// <reference types="@gas/types" />\n\n${content}`;
       }
 
-      // Add global exports at bottom if not present
-      // Extract function names and add global assignments
       const funcRegex = /^function\s+(\w+)\s*\(/gm;
       const funcs: string[] = [];
       let match;
@@ -153,7 +179,7 @@ async function migrateExisting(scriptId: string): Promise<{ success: boolean }> 
       if (funcs.length > 0 && !content.includes("global.")) {
         content += `\n\n// Expose functions to Google Apps Script runtime\n`;
         content += `declare const global: { [key: string]: unknown };\n`;
-        funcs.forEach(f => {
+        funcs.forEach((f) => {
           content += `global.${f} = ${f};\n`;
         });
       }
@@ -164,7 +190,6 @@ async function migrateExisting(scriptId: string): Promise<{ success: boolean }> 
     }
   }
 
-  // Update .clasp.json to use dist
   const config = JSON.parse(await Deno.readTextFile(".clasp.json"));
   config.rootDir = "dist";
   await Deno.writeTextFile(".clasp.json", JSON.stringify(config, null, 2));
@@ -176,20 +201,22 @@ async function migrateExisting(scriptId: string): Promise<{ success: boolean }> 
 // Configuration Functions
 // ============================================================================
 
-async function setupDevConfig(scriptId: string, features: { logs: boolean; run: boolean }): Promise<void> {
-  const config: Record<string, unknown> = {
+async function setupDevConfig(
+  scriptId: string,
+  features: { logs: boolean; run: boolean },
+  config: Config
+): Promise<void> {
+  const claspConfig: Record<string, unknown> = {
     scriptId,
     rootDir: "dist",
   };
 
-  // Add GCP project if any dev features enabled
   if (features.logs || features.run) {
-    config.projectId = "gas-dev-env";
+    claspConfig.projectId = config.gcpDevProjectId;
   }
 
-  await Deno.writeTextFile(".clasp.dev.json", JSON.stringify(config, null, 2));
+  await Deno.writeTextFile(".clasp.dev.json", JSON.stringify(claspConfig, null, 2));
 
-  // Clean up .clasp.json if it exists
   try {
     await Deno.remove(".clasp.json");
   } catch {
@@ -205,7 +232,6 @@ async function setupProdConfig(scriptId: string): Promise<void> {
 
   await Deno.writeTextFile(".clasp.prod.json", JSON.stringify(config, null, 2));
 
-  // Clean up .clasp.json if it exists
   try {
     await Deno.remove(".clasp.json");
   } catch {
@@ -228,7 +254,16 @@ async function updateManifest(features: { run: boolean }): Promise<void> {
 // ============================================================================
 
 async function main() {
-  console.log("\n🚀 Google Apps Script Project Setup\n");
+  const config = await loadConfig();
+
+  console.log("\n🚀 Google Apps Script Project Setup");
+  console.log("─".repeat(40));
+  console.log(`   GCP Project:  ${config.gcpDevProjectId}`);
+  console.log(`   Clasp User:   ${config.claspDevUser}`);
+  console.log(`   Gas Libs:     ${config.gasLibsPath}`);
+  console.log("─".repeat(40));
+
+  await prompt("\nPress Enter to continue...");
 
   // -------------------------------------------------------------------------
   // Step 1: Project Mode
@@ -252,14 +287,14 @@ async function main() {
   let devScriptId: string | undefined;
 
   switch (modeIndex) {
-    case 0: { // New standalone
+    case 0: {
       const result = await createStandalone(`${projectName} (dev)`);
       if (!result.success) Deno.exit(1);
       devScriptId = result.scriptId;
       break;
     }
 
-    case 1: { // New container-bound
+    case 1: {
       const containerType = await selectOne("Container type", [
         "Google Sheet",
         "Google Doc",
@@ -277,7 +312,7 @@ async function main() {
       break;
     }
 
-    case 2: { // Clone existing
+    case 2: {
       const scriptId = await prompt("\nEnter script ID to clone: ");
       if (!scriptId) {
         console.error("❌ Script ID required");
@@ -285,12 +320,12 @@ async function main() {
       }
       const result = await cloneExisting(scriptId);
       if (!result.success) Deno.exit(1);
-      const config = JSON.parse(await Deno.readTextFile(".clasp.json"));
-      devScriptId = config.scriptId;
+      const claspConfig = JSON.parse(await Deno.readTextFile(".clasp.json"));
+      devScriptId = claspConfig.scriptId;
       break;
     }
 
-    case 3: { // Migrate existing
+    case 3: {
       const scriptId = await prompt("\nEnter script ID to migrate: ");
       if (!scriptId) {
         console.error("❌ Script ID required");
@@ -298,8 +333,8 @@ async function main() {
       }
       const result = await migrateExisting(scriptId);
       if (!result.success) Deno.exit(1);
-      const config = JSON.parse(await Deno.readTextFile(".clasp.json"));
-      devScriptId = config.scriptId;
+      const claspConfig = JSON.parse(await Deno.readTextFile(".clasp.json"));
+      devScriptId = claspConfig.scriptId;
       break;
     }
   }
@@ -325,7 +360,7 @@ async function main() {
   // -------------------------------------------------------------------------
   console.log("\n⚙️  Configuring dev environment...");
 
-  await setupDevConfig(devScriptId!, { logs: enableLogs, run: enableRun });
+  await setupDevConfig(devScriptId!, { logs: enableLogs, run: enableRun }, config);
   console.log("✓ Created .clasp.dev.json");
 
   await updateManifest({ run: enableRun });
@@ -337,28 +372,28 @@ async function main() {
   if (createProd) {
     console.log("\n📝 Creating prod script...");
 
-    // Determine how to create prod based on original mode
     let prodResult: { success: boolean; scriptId?: string };
 
     if (modeIndex === 0) {
-      // Standalone
       prodResult = await createStandalone(`${projectName} (prod)`);
     } else if (modeIndex === 1) {
-      // Container-bound - need to ask for parent again or use same one
-      const useSameContainer = await prompt("Use same container for prod? (y/n) [n]: ") || "n";
+      const useSameContainer = (await prompt("Use same container for prod? (y/n) [n]: ")) || "n";
+      let prodParentId: string;
       if (useSameContainer.toLowerCase() === "y") {
-        // Read parent from dev script... actually clasp doesn't store this
-        // We'd need to ask again
-        console.log("Note: clasp doesn't store parent ID, you'll need to provide it again.");
+        const devConfig = JSON.parse(await Deno.readTextFile(".clasp.dev.json"));
+        prodParentId = devConfig.parentId;
+        if (!prodParentId) {
+          prodParentId = await prompt("Enter prod container ID: ");
+        }
+      } else {
+        prodParentId = await prompt("Enter prod container ID: ");
       }
-      const prodParentId = await prompt("Enter prod container ID: ");
       if (!prodParentId) {
         console.error("❌ Container ID required for prod");
         Deno.exit(1);
       }
       prodResult = await createContainerBound(`${projectName} (prod)`, prodParentId);
     } else {
-      // Clone/migrate - create standalone prod by default
       prodResult = await createStandalone(`${projectName} (prod)`);
     }
 
@@ -371,7 +406,7 @@ async function main() {
   // -------------------------------------------------------------------------
   // Step 6: Build and push
   // -------------------------------------------------------------------------
-  const doBuild = await prompt("\nBuild and push now? (y/n) [y]: ") || "y";
+  const doBuild = (await prompt("\nBuild and push now? (y/n) [y]: ")) || "y";
 
   if (doBuild.toLowerCase() === "y") {
     console.log("\n📦 Building...");
@@ -390,12 +425,18 @@ async function main() {
     }
     console.log("✓ Pushed to dev");
 
-    // Deploy if clasp run enabled
     if (enableRun) {
-      const doDeploy = await prompt("\nCreate API executable deployment? (y/n) [y]: ") || "y";
+      const doDeploy = (await prompt("\nCreate API executable deployment? (y/n) [y]: ")) || "y";
       if (doDeploy.toLowerCase() === "y") {
         console.log("\n🚀 Deploying...");
-        const deployResult = await run(["clasp", "deploy", "--project", ".clasp.dev.json", "-d", "dev"]);
+        const deployResult = await run([
+          "clasp",
+          "deploy",
+          "--project",
+          ".clasp.dev.json",
+          "-d",
+          "dev",
+        ]);
         if (!deployResult.success) {
           console.error("❌ Deploy failed:", deployResult.output);
           Deno.exit(1);
@@ -408,19 +449,19 @@ async function main() {
   // -------------------------------------------------------------------------
   // Step 7: Done
   // -------------------------------------------------------------------------
-  console.log("\n" + "=".repeat(60));
+  console.log("\n" + "═".repeat(60));
   console.log("✅ Setup complete!");
-  console.log("=".repeat(60));
+  console.log("═".repeat(60));
 
   if (enableLogs || enableRun) {
     console.log("\n📋 Manual steps required (one-time):\n");
     console.log("  1. Bind dev script to GCP project:");
     console.log("     clasp open --project .clasp.dev.json");
-    console.log("     → Project Settings → Change project → gas-dev-env\n");
+    console.log(`     → Project Settings → Change project → ${config.gcpDevProjectId}\n`);
 
     if (enableRun) {
       console.log("  2. Re-authenticate for clasp run:");
-      console.log("     clasp login --creds ~/.config/clasp/client_secret.json --project .clasp.dev.json\n");
+      console.log(`     clasp login --creds ${clasp.claspDevUser} --project .clasp.dev.json\n`);
     }
   }
 
