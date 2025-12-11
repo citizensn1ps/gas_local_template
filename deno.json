@@ -2,7 +2,8 @@
   "config": {
     "gasLibsPath": "",
     "gcpDevProjectId": "",
-    "claspDevUser": ""
+    "claspDevUser": "",
+    "claspDevCredsPath": ""
   },
   "imports": {
     "@gas/types": "/Users/alex/dev/gas_libs/types/",
@@ -15,7 +16,6 @@
     "push:dev": "clasp push --project .clasp.dev.json",
     "push:prod": "clasp push --project .clasp.prod.json",
     "deploy:dev": "clasp deploy --project .clasp.dev.json -d 'dev'",
-    "logs": "clasp logs --watch --project .clasp.dev.json",
-    "run": "clasp run --project .clasp.dev.json"
+    "logs": "clasp logs --watch --project .clasp.dev.json"
   }
 }

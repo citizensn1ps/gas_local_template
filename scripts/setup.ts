@@ -12,6 +12,7 @@ interface Config {
   gcpDevProjectId: string;
   gcpDevProjectNumber: string;
   claspDevUser: string;
+  claspDevCredsPath: string;
 }
 
 const DEFAULTS: Config = {
@@ -19,6 +20,7 @@ const DEFAULTS: Config = {
   gcpDevProjectId: "gas-dev-env-479619",
   gcpDevProjectNumber: "549065074538",
   claspDevUser: "gasDev",
+  claspDevCredsPath: "/Users/alex/.config/clasp/gasDevEnv-run-client-secret.json"
 };
 
 async function loadConfig(): Promise<Config> {
@@ -29,7 +31,9 @@ async function loadConfig(): Promise<Config> {
       gasLibsPath: userConfig.gasLibsPath || DEFAULTS.gasLibsPath,
       gcpDevProjectId: userConfig.gcpDevProjectId || DEFAULTS.gcpDevProjectId,
       gcpDevProjectNumber: userConfig.gcpDevProjectNumber || DEFAULTS.gcpDevProjectNumber,
-      claspDevUser: userConfig.claspDevUser || DEFAULTS.claspDevUser
+      claspDevUser: userConfig.claspDevUser || DEFAULTS.claspDevUser,
+      claspDevCredsPath: userConfig.claspDevCredsPath || DEFAULTS.claspDevCredsPath
+
     };
   } catch {
     console.log("⚠️  Could not read deno.json, using defaults");
@@ -200,6 +204,28 @@ async function migrateExisting(scriptId: string): Promise<{ success: boolean }> 
   return { success: true };
 }
 
+async function loginForRun(config: Config): Promise<boolean> {
+  console.log("\n🔐 Authenticating for clasp run...");
+  const result = await run([
+    "clasp", "login",
+    "--user", config.claspDevUser,
+    "--use-project-scopes",
+    "--creds", config.claspDevCredsPath,
+    "--project", ".clasp.dev.json"
+  ]);
+
+  if (!result.success) {
+    console.error("⚠️  Login failed:", result.output);
+    console.log("    You can retry manually with:");
+    console.log(` clasp login --user ${config.claspDevUser} --use-project-scopes -creds ${config.claspDevCredsPath} --project .clasp.dev.json`)
+    return false
+  }
+
+  console.log("✓ Authenticated for clasp run");
+  return true
+
+}
+
 // ============================================================================
 // Configuration Functions
 // ============================================================================
@@ -250,6 +276,25 @@ async function updateManifest(features: { run: boolean }): Promise<void> {
   }
 
   await Deno.writeTextFile("appsscript.json", JSON.stringify(manifest, null, 2));
+}
+
+async function updateDenoJsonTasks(config: Config): Promise<void> {
+  const denoConfig = JSON.parse(await Deno.readTextFile("deno.json"));
+
+  denoConfig.tasks = {
+    setup: "deno run -A scripts/setup.ts",
+    build: "deno run -A scripts/build.ts",
+    test: "deno test --allow-read tests/",
+    "push:dev": "clasp push --project .clasp.dev.json",
+    "push:prod": "clasp push --project .clasp.prod.json",
+    "deploy:dev": "clasp deploy --project .clasp.dev.json -d 'dev'",
+    logs: "clasp logs --watch --project .clasp.dev.json",
+    run: `clasp run --user ${config.claspDevUser} --creds ${config.claspDevCredsPath} --project .clasp.dev.json`
+
+  };
+
+  await Deno.writeTextFile("deno.json", JSON.stringify(denoConfig, null, 2));
+  console.log("✓ Updated deno.json tasks");
 }
 
 // ============================================================================
@@ -378,25 +423,28 @@ async function main() {
     let prodResult: { success: boolean; scriptId?: string };
 
     if (modeIndex === 0) {
+      // Standalone
       prodResult = await createStandalone(`${projectName} (prod)`);
     } else if (modeIndex === 1) {
+      // Container bound
       const useSameContainer = (await prompt("Use same container for prod? (y/n) [n]: ")) || "n";
       let prodParentId: string;
+
       if (useSameContainer.toLowerCase() === "y") {
+        // Read the parentId we already have from dev config
         const devConfig = JSON.parse(await Deno.readTextFile(".clasp.dev.json"));
         prodParentId = devConfig.parentId;
-        if (!prodParentId) {
-          prodParentId = await prompt("Enter prod container ID: ");
-        }
       } else {
         prodParentId = await prompt("Enter prod container ID: ");
       }
+
       if (!prodParentId) {
         console.error("❌ Container ID required for prod");
         Deno.exit(1);
       }
       prodResult = await createContainerBound(`${projectName} (prod)`, prodParentId);
     } else {
+      // Clone or migrate - create a standalone for prod
       prodResult = await createStandalone(`${projectName} (prod)`);
     }
 
@@ -450,21 +498,38 @@ async function main() {
   }
 
   // -------------------------------------------------------------------------
-  // Step 7: Done
+  // Step 7: Update deno.json tasks and authenticate
+  // -------------------------------------------------------------------------
+  await updateDenoJsonTasks(config);
+
+  let runAuthSuccess = false;
+  if (enableRun) {
+    runAuthSuccess = loginForRun(config);
+  }
+
+
+  // -------------------------------------------------------------------------
+  // Step 8: Done
   // -------------------------------------------------------------------------
   console.log("\n" + "═".repeat(60));
-  console.log("✅ Setup complete!");
+  console.log("✓ Setup complete!");
   console.log("═".repeat(60));
+
 
   if (enableLogs || enableRun) {
     console.log("\n📋 Manual steps required (one-time):\n");
     console.log("  1. Bind dev script to GCP project:");
     console.log("     clasp open --project .clasp.dev.json");
     console.log(`     → Project Settings → Change project → GCP Project Dev Number: ${config.gcpDevProjectNumber}\n`);
+
     if (enableRun) {
-      console.log("  2. Re-authenticate for clasp run:");
-      console.log(`     clasp login --creds ${config.claspDevUser} --project .clasp.dev.json\n`);
+      console.log("  2. Authenticate for clasp run (failed during setup):");
+      console.log(`     clasp login --user ${config.claspDevUser} --use-project-scopes --creds ${config.claspDevCredsPath} --project .clasp.dev.json\n`);
     }
+  }
+
+  if (enableRun && runAuthSuccess) {
+    console.log("✓ clasp run authentication successful\n")
   }
 
   console.log("📋 Available commands:\n");
