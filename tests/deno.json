@@ -7,6 +7,7 @@
   },
   "imports": {
     "@gas/types": "/Users/alex/dev/gas_libs/types/consolidated.d.ts",
+    "@gas/mocks": "/Users/alex/dev/gas_libs/mocks/gasmask/src/mod.ts"
   },
   "tasks": {
     "setup": "deno run -A scripts/setup.ts",

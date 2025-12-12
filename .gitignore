@@ -3,7 +3,7 @@
 .clasp.prod.json
 
 # build output
-dist/Code.js
+dist/code.js
 
 # deno
 .deno/

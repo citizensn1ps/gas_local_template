@@ -22,3 +22,4 @@ function showMessage(): void {
 declare const global: { [key: string]: unknown };
 global.onOpen = onOpen;
 global.showMessage = showMessage;
+
